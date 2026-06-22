@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -124,7 +125,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	s.sessions[sess.id] = sess
 	s.ipCounts[ip]++
 	s.mu.Unlock()
-	debugf("registered realm=%s session=%s addresses=%d remote=%s", id, sess.id, len(req.Addresses), ip)
+	debugf("+registered realm=%s session=%s addresses=%s remote=%s", id, sess.id, fmtIP(req.Addresses), ip)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"session_id": sess.id,
@@ -291,7 +292,7 @@ func (s *server) connect(w http.ResponseWriter, r *http.Request) {
 	defer s.cancelPending(sess, req.Nonce)
 
 	if s.sendEvent(sess, sessionEvent{kind: "punch", data: punchEvent{Addresses: req.Addresses, Nonce: req.Nonce, Obfs: req.Obfs}}) {
-		debugf("connect notified realm=%s session=%s clientAddresses=%d serverAddresses=%d remote=%s", id, sess.id, len(req.Addresses), len(serverAddrs), remote)
+		debugf("+connect notified realm=%s session=%s clientAddresses=%s serverAddresses=%s remote=%s", id, sess.id, fmtIP(req.Addresses), fmtIP(serverAddrs), remote)
 	} else {
 		debugf("connect rate limited realm=%s session=%s remote=%s", id, sess.id, remote)
 		writeErr(w, http.StatusServiceUnavailable, errRateLimited, "server event buffer full")
@@ -310,7 +311,7 @@ func (s *server) connect(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(payload.addresses) > 0 {
 			serverAddrs = payload.addresses
-			debugf("connect fresh addresses realm=%s session=%s addresses=%d remote=%s", id, sess.id, len(serverAddrs), remote)
+			debugf("+connect fresh addresses realm=%s session=%s addresses=%s remote=%s", id, sess.id, fmtIP(serverAddrs), remote)
 		}
 	case <-timer.C:
 		debugf("connect response timed out realm=%s session=%s remote=%s", id, sess.id, remote)
@@ -363,6 +364,13 @@ func (s *server) connectResponse(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, errAttemptNotFound, "no pending attempt for nonce")
 		return
 	}
-	debugf("connect-response delivered realm=%s session=%s addresses=%d remote=%s", id, sess.id, len(req.Addresses), remote)
+	debugf("+connect-response delivered realm=%s session=%s addresses=%s remote=%s", id, sess.id, fmtIP(req.Addresses), remote)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func fmtIP(ips []string) string {
+	if len(ips) == 0 {
+		return "[]"
+	}
+	return "\n  [\n    " + strings.Join(ips, "\n    ") + "  \n  ]"
 }

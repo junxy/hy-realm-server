@@ -28,6 +28,20 @@ var (
 	debugLogs  bool
 )
 
+var (
+	Version   = "dev"     // 默认值，本地直接 go run 时显示
+	BuildTime = "unknown" // 默认值
+)
+
+func showVersion() {
+	// 启动时在标准输出中打印版本信息（这会被 systemd 的 journald 完美捕获）
+	log.Println("==================================================")
+	log.Printf(" Application: hysteria realm server \n")
+	log.Printf(" Version:     %s\n", Version)
+	log.Printf(" Build Time:  %s\n", BuildTime)
+	log.Println("==================================================")
+}
+
 func debugf(format string, v ...any) {
 	if debugLogs {
 		log.Printf("debug: "+format, v...)
@@ -62,6 +76,7 @@ func main() {
 		Handler:           s.routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	showVersion()
 	log.Printf("hysteria realm server listening on %s", cfg.Listen)
 	if debugLogs {
 		log.Println("debug logging enabled")
@@ -95,9 +110,18 @@ func parseConfig(args []string) (config, error) {
 	fs.IntVar(&cfg.MaxRealmsPerIP, "max-realms-per-ip", cfg.MaxRealmsPerIP, "maximum realms per client IP (0 = unlimited)")
 	fs.StringVar(&cfg.TrustedProxyHeader, "trusted-proxy-header", cfg.TrustedProxyHeader, "header to read real client IP from (e.g. X-Forwarded-For)")
 	fs.StringVar(&cfg.RealmNamePattern, "realm-name-pattern", cfg.RealmNamePattern, "regex realm names must match")
+
+	versionFlag := fs.BoolP("version", "v", false, "显示当前版本号与构建时间")
+
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
+
+	if *versionFlag {
+		showVersion()
+		os.Exit(0)
+	}
+
 	return cfg, nil
 }
 
